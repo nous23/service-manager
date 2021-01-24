@@ -1,0 +1,7 @@
+---
+tasks:
+- binPath: C:\Users\cchen\Program\prometheus-2.24.1.windows-amd64\prometheus.exe
+  name: prometheus-server
+  args:
+  - --config.file=C:\Users\cchen\Program\prometheus-2.24.1.windows-amd64\prometheus.yml
+  - --storage.tsdb.path=C:\Users\cchen\Program\prometheus-2.24.1.windows-amd64\data

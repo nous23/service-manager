@@ -12,3 +12,11 @@ func ExitOnError(err error) {
 	_, _ = fmt.Fprint(os.Stderr, err.Error())
 	log.Fatal(err.Error())
 }
+
+// check whether file exists
+func Exists(path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
