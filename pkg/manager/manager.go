@@ -6,12 +6,19 @@ import (
 	"os/user"
 	"strings"
 
+	"github.com/alecthomas/kingpin"
 	"github.com/fsnotify/fsnotify"
 	"github.com/kardianos/service"
 	log "github.com/sirupsen/logrus"
 
 	"servicemanager/pkg/util"
 )
+
+var op string
+
+func init() {
+	kingpin.Flag("service", "operation type of service {start|install|uninstall}").StringVar(&op)
+}
 
 func New() (service.Service, error) {
 	u, err := user.Current()
