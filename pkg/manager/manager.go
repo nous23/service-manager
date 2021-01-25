@@ -59,7 +59,7 @@ func (t *task) String() string {
 
 func (t *task) start() {
 	log.Debugf("start task %s", t.String())
-	c := exec.Command("cmd", "/c", fmt.Sprintf("%s %s", t.binPath, strings.Join(t.args, " ")))
+	c := exec.Command(t.binPath, t.args...)
 	go func() {
 		output, err := c.CombinedOutput()
 		if err != nil {
@@ -71,24 +71,29 @@ func (t *task) start() {
 
 func (t *task) stop() {
 	log.Debugf("stop task %s", t.String())
-	if t.cmd != nil {
-		err := t.cmd.Process.Kill()
-		if err != nil {
-			log.Errorf("stop command %s failed: %v", t.cmd.String(), err)
-		}
-		state, err := t.cmd.Process.Wait()
-		if err != nil {
-			log.Errorf("wait process %d exit failed: %v, status: %+v", t.cmd.Process.Pid, err, state)
-		}
+	if t.cmd == nil {
+		return
+	}
+	err := t.cmd.Process.Kill()
+	if err == nil {
+		log.Infof("stop command %s success", t.cmd.String())
+		return
+	}
+	log.Warningf("kill process %d failed: %v", t.cmd.Process.Pid, err)
+	// try force kill process
+	cmd := exec.Command("taskkill", "/f", "/pid", fmt.Sprintf("%d", t.cmd.Process.Pid))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Errorf("stop command %s failed: %v, output: %s", t.cmd.String(), err, string(output))
 	}
 }
 
-func (sm *serviceManager) Start(s service.Service) error {
+func (sm *serviceManager) Start(service.Service) error {
 	go sm.start()
 	return nil
 }
 
-func (sm *serviceManager) Stop(s service.Service) error {
+func (sm *serviceManager) Stop(service.Service) error {
 	sm.stop()
 	return nil
 }
