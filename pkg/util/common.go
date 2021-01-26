@@ -13,6 +13,13 @@ func ExitOnError(err error) {
 	log.Fatal(err.Error())
 }
 
+// exit 0
+func ExitOnSuccess(msg string) {
+	_, _ = fmt.Fprintf(os.Stdout, msg)
+	log.Info(msg)
+	os.Exit(0)
+}
+
 // check whether file exists
 func Exists(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
