@@ -3,10 +3,8 @@ package manager
 import (
 	"fmt"
 	"os/exec"
-	"os/user"
 	"strings"
 
-	"github.com/alecthomas/kingpin"
 	"github.com/fsnotify/fsnotify"
 	"github.com/kardianos/service"
 	log "github.com/sirupsen/logrus"
@@ -14,24 +12,20 @@ import (
 	"servicemanager/pkg/util"
 )
 
-var op string
-
-func init() {
-	kingpin.Flag("service", "operation type of service {start|install|uninstall}").StringVar(&op)
-}
+const (
+	Name = "ServiceManager"
+	DisplayName = "Service Manager"
+	Description = `Service Manager manages user custom services, providing a web UI to control services.`
+)
 
 func New() (service.Service, error) {
-	u, err := user.Current()
-	if err != nil {
-		log.Errorf("get current user failed: %v", err)
-		return nil, err
-	}
 	config := &service.Config{
-		Name:        "ServiceManager",
-		DisplayName: "Service Manager",
-		Description: "Manage Windows Service",
-		UserName:    u.Username,
-		Option:      nil,
+		Name:        Name,
+		DisplayName: DisplayName,
+		Description: Description,
+		Arguments: []string{
+			"--log-level=debug",
+		},
 	}
 
 	sm := &serviceManager{
@@ -58,6 +52,7 @@ type task struct {
 	binPath string
 	args    []string
 	cmd     *exec.Cmd
+	config  *TaskConfig
 }
 
 func (t *task) String() string {
@@ -122,8 +117,6 @@ func (sm *serviceManager) start() {
 	sm.configWatcher = w
 	go sm.watchConfig()
 	sm.run()
-	neverExit := make(chan int)
-	<-neverExit
 }
 
 func (sm *serviceManager) stop() {
@@ -156,9 +149,10 @@ func (sm *serviceManager) dealWithConfigOperation(event *fsnotify.Event) {
 	}
 	switch event.Op {
 	case fsnotify.Write:
+		log.Infof("watch config write")
 		sm.configReload <- struct{}{}
 	default:
-
+		log.Infof("watch config %s", event.String())
 	}
 }
 
@@ -171,10 +165,10 @@ func (sm *serviceManager) run() {
 	sm.config = configs
 	tm := make(map[string]*task)
 	for _, taskConf := range sm.config.Tasks {
-		t := &task{
-			name:    taskConf.Name,
-			binPath: taskConf.BinPath,
-			args:    taskConf.Args,
+		t, err := createTask(taskConf)
+		if err != nil {
+			log.Errorf("create task failed: %v", err)
+			continue
 		}
 		if tm[t.name] != nil {
 			log.Errorf("task %s already exits: %s", t.name, tm[t.name].String())
@@ -186,4 +180,78 @@ func (sm *serviceManager) run() {
 	for _, t := range sm.tasks {
 		t.start()
 	}
+
+	for {
+		select {
+		case <-sm.configReload:
+			configs, err = loadConfig()
+			if err != nil {
+				log.Warningf("load config failed: %v", err)
+				continue
+			}
+
+			newTasks := make(map[string]*TaskConfig)
+			for _, tc := range configs.Tasks {
+				newTasks[tc.Name] = tc
+			}
+
+			// stop deleted tasks
+			var toStop []string
+			for _, t := range sm.tasks {
+				_, ok := newTasks[t.name]
+				if !ok {
+					toStop = append(toStop, t.name)
+				}
+			}
+			for _, taskName := range toStop {
+				sm.tasks[taskName].stop()
+				delete(sm.tasks, taskName)
+			}
+
+			// start new task and restart updated task
+			for _, tc := range configs.Tasks {
+				oldTask, ok := sm.tasks[tc.Name]
+				if ok {
+					if oldTask.config.Equivalent(tc) {
+						log.Infof("task %s not changed, keep running", tc.Name)
+						continue
+					}
+					// update task
+					oldTask.stop()
+					newTask, err := createTask(tc)
+					if err != nil {
+						log.Errorf("create task failed: %v", err)
+						continue
+					}
+					newTask.start()
+					sm.tasks[tc.Name] = newTask
+					continue
+				} else {
+					// start new task
+					newTask, err := createTask(tc)
+					if err != nil {
+						log.Errorf("create task failed: %v", err)
+						continue
+					}
+					newTask.start()
+					sm.tasks[tc.Name] = newTask
+				}
+			}
+		}
+	}
+}
+
+func createTask(c *TaskConfig) (*task, error) {
+	if c.Name == "" {
+		return nil, fmt.Errorf("task name not specified")
+	}
+	if c.BinPath == "" {
+		return nil, fmt.Errorf("bin path not specified")
+	}
+	return &task{
+		name:    c.Name,
+		binPath: c.BinPath,
+		args:    c.Args,
+		config:  c,
+	}, nil
 }
