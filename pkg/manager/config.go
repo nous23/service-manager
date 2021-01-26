@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alecthomas/kingpin"
 	log "github.com/sirupsen/logrus"
@@ -30,6 +31,19 @@ type TaskConfig struct {
 
 type Configs struct {
 	Tasks []*TaskConfig `yaml:"tasks"`
+}
+
+func (t *TaskConfig) Equivalent(tt *TaskConfig) bool {
+	if tt == nil {
+		return false
+	}
+	if t.BinPath != tt.BinPath {
+		return false
+	}
+	if strings.Join(t.Args, "") != strings.Join(tt.Args, "") {
+		return false
+	}
+	return true
 }
 
 func initConfigPath() error {
