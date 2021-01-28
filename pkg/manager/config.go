@@ -3,7 +3,6 @@ package manager
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
+	"servicemanager/pkg/global"
 	"servicemanager/pkg/util"
 )
 
@@ -48,12 +48,7 @@ func (t *TaskConfig) Equivalent(tt *TaskConfig) bool {
 
 func initConfigPath() error {
 	if configPath == "" {
-		currDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-		if err != nil {
-			log.Errorf("get current directory failed: %v", err)
-			return err
-		}
-		configPath = filepath.Join(currDir, configFileName)
+		configPath = filepath.Join(global.CurrDir, configFileName)
 	}
 	if !util.Exists(configPath) {
 		return fmt.Errorf("config file %s does not exists", configPath)
@@ -63,12 +58,7 @@ func initConfigPath() error {
 
 func loadConfig() (*Configs, error) {
 	if configPath == "" {
-		currDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-		if err != nil {
-			log.Errorf("get current directory failed: %v", err)
-			return nil, err
-		}
-		configPath = filepath.Join(currDir, configFileName)
+		configPath = filepath.Join(global.CurrDir, configFileName)
 	}
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
