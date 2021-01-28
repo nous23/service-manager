@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gin-gonic/gin"
 	"github.com/kardianos/service"
 	log "github.com/sirupsen/logrus"
 
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	Name = "ServiceManager"
+	Name        = "ServiceManager"
 	DisplayName = "Service Manager"
 	Description = `Service Manager manages user custom services, providing a web UI to control services.`
 )
@@ -30,8 +31,15 @@ func New() (service.Service, error) {
 
 	sm := &serviceManager{
 		configReload: make(chan struct{}, 100),
-		tasks:        make(map[string]*task),
+		tasks:        make(map[string]*Task),
 	}
+
+	r, err := newServer(sm)
+	if err != nil {
+		log.Errorf("create server failed: %v", err)
+		return nil, err
+	}
+	sm.server = r
 	s, err := service.New(sm, config)
 	if err != nil {
 		log.Errorf("create service failed: %v", err)
@@ -42,24 +50,27 @@ func New() (service.Service, error) {
 
 type serviceManager struct {
 	configWatcher *fsnotify.Watcher
-	tasks         map[string]*task
+	tasks         map[string]*Task
 	configReload  chan struct{}
 	config        *Configs
+	server        *gin.Engine
 }
 
-type task struct {
-	name    string
+type Task struct {
+	Name    string
 	binPath string
 	args    []string
 	cmd     *exec.Cmd
-	config  *TaskConfig
+	Config  *TaskConfig
 }
 
-func (t *task) String() string {
-	return fmt.Sprintf("[%s] %s %s", t.name, t.binPath, strings.Join(t.args, " "))
+type TaskList []*Task
+
+func (t *Task) String() string {
+	return fmt.Sprintf("[%s] %s %s", t.Name, t.binPath, strings.Join(t.args, " "))
 }
 
-func (t *task) start() {
+func (t *Task) start() {
 	log.Debugf("start task %s", t.String())
 	c := exec.Command(t.binPath, t.args...)
 	go func() {
@@ -71,7 +82,7 @@ func (t *task) start() {
 	t.cmd = c
 }
 
-func (t *task) stop() {
+func (t *Task) stop() {
 	log.Debugf("stop task %s", t.String())
 	if t.cmd == nil {
 		return
@@ -158,23 +169,31 @@ func (sm *serviceManager) dealWithConfigOperation(event *fsnotify.Event) {
 
 func (sm *serviceManager) run() {
 	log.Debug("run service manager")
+	go func() {
+		err := sm.server.Run(":9999")
+		if err != nil {
+			log.Errorf("run server failed: %v", err)
+		}
+		log.Errorf("server exit")
+	}()
+
 	configs, err := loadConfig()
 	if err != nil {
 		log.Errorf("load config failed: %v", err)
 	}
 	sm.config = configs
-	tm := make(map[string]*task)
+	tm := make(map[string]*Task)
 	for _, taskConf := range sm.config.Tasks {
 		t, err := createTask(taskConf)
 		if err != nil {
 			log.Errorf("create task failed: %v", err)
 			continue
 		}
-		if tm[t.name] != nil {
-			log.Errorf("task %s already exits: %s", t.name, tm[t.name].String())
+		if tm[t.Name] != nil {
+			log.Errorf("task %s already exits: %s", t.Name, tm[t.Name].String())
 			continue
 		}
-		tm[t.name] = t
+		tm[t.Name] = t
 	}
 	sm.tasks = tm
 	for _, t := range sm.tasks {
@@ -198,9 +217,9 @@ func (sm *serviceManager) run() {
 			// stop deleted tasks
 			var toStop []string
 			for _, t := range sm.tasks {
-				_, ok := newTasks[t.name]
+				_, ok := newTasks[t.Name]
 				if !ok {
-					toStop = append(toStop, t.name)
+					toStop = append(toStop, t.Name)
 				}
 			}
 			for _, taskName := range toStop {
@@ -212,7 +231,7 @@ func (sm *serviceManager) run() {
 			for _, tc := range configs.Tasks {
 				oldTask, ok := sm.tasks[tc.Name]
 				if ok {
-					if oldTask.config.Equivalent(tc) {
+					if oldTask.Config.Equivalent(tc) {
 						log.Infof("task %s not changed, keep running", tc.Name)
 						continue
 					}
@@ -241,17 +260,25 @@ func (sm *serviceManager) run() {
 	}
 }
 
-func createTask(c *TaskConfig) (*task, error) {
+func (sm *serviceManager) getTaskList() TaskList {
+	var ts = TaskList{}
+	for _, t := range sm.tasks {
+		ts = append(ts, t)
+	}
+	return ts
+}
+
+func createTask(c *TaskConfig) (*Task, error) {
 	if c.Name == "" {
 		return nil, fmt.Errorf("task name not specified")
 	}
 	if c.BinPath == "" {
 		return nil, fmt.Errorf("bin path not specified")
 	}
-	return &task{
-		name:    c.Name,
+	return &Task{
+		Name:    c.Name,
 		binPath: c.BinPath,
 		args:    c.Args,
-		config:  c,
+		Config:  c,
 	}, nil
 }
