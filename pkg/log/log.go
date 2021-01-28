@@ -2,12 +2,15 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/sirupsen/logrus"
+
+	"servicemanager/pkg/global"
 )
 
 const logFileName = "service-manager.log"
@@ -18,12 +21,11 @@ func init() {
 	kingpin.Flag("log-level", "log level").Default("info").StringVar(&level)
 }
 
+// log writer
+var f io.Writer
+
 func Init() error {
-	currDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		return err
-	}
-	logPath := filepath.Join(currDir, logFileName)
+	logPath := filepath.Join(global.CurrDir, logFileName)
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
@@ -55,4 +57,8 @@ func logLevel() logrus.Level {
 	default:
 		return logrus.InfoLevel
 	}
+}
+
+func GetLogWriter() io.Writer {
+	return f
 }
