@@ -1,13 +1,13 @@
 package log
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 
-	"github.com/alecthomas/kingpin"
 	"github.com/sirupsen/logrus"
 
 	"servicemanager/pkg/global"
@@ -18,7 +18,7 @@ const logFileName = "service-manager.log"
 var level string
 
 func init() {
-	kingpin.Flag("log-level", "log level").Default("info").StringVar(&level)
+	flag.StringVar(&level,"log-level", "","log level")
 }
 
 // log writer

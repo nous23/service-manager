@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
-	"github.com/alecthomas/kingpin"
 	"github.com/kardianos/service"
 
 	pkglog "servicemanager/pkg/log"
@@ -14,11 +14,11 @@ import (
 var action string
 
 func init() {
-	kingpin.Flag("action", "start|stop|restart|install|uninstall").Default("").StringVar(&action)
+	flag.StringVar(&action, "action", "", "start|stop|restart|install|uninstall")
 }
 
 func main() {
-	kingpin.Parse()
+	flag.Parse()
 
 	err := pkglog.Init()
 	if err != nil {

@@ -1,12 +1,12 @@
 package manager
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 
-	"github.com/alecthomas/kingpin"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
@@ -19,7 +19,7 @@ const configFileName = "tasks.yaml"
 var configPath string
 
 func init() {
-	kingpin.Flag("config-path", "path of task config file").Default("").StringVar(&configPath)
+	flag.StringVar(&configPath, "config-path", "", "path of task config file")
 }
 
 // Config of task
