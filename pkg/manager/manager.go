@@ -74,9 +74,11 @@ func (t *Task) start() {
 	log.Debugf("start task %s", t.String())
 	c := exec.Command(t.binPath, t.args...)
 	go func() {
-		output, err := c.CombinedOutput()
+		err := c.Run()
 		if err != nil {
-			log.Errorf("run command %s failed: %s", c.String(), string(output))
+			log.Errorf("run command %s error: %v", c.String(), err)
+		} else {
+			log.Infof("run command %s success", c.String())
 		}
 	}()
 	t.cmd = c
