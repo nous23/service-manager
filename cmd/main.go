@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/kardianos/service"
 
@@ -18,6 +20,10 @@ func init() {
 }
 
 func main() {
+	go func() {
+		http.ListenAndServe("localhost:9001", nil)
+	}()
+
 	flag.Parse()
 
 	err := pkglog.Init()
